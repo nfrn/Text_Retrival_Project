@@ -47,7 +47,9 @@ def get_embeddings_weights(t, vocab_size):
         if embedding_vector is not None:
             embedding_matrix[i] = embedding_vector
 
-    return embedding_matrix
+
+    reverse_word_map = dict(map(reversed, t.word_index.items()))
+    return embedding_matrix, reverse_word_map
 
 
 def load_data(path):
@@ -59,14 +61,15 @@ def load_data(path):
     t.fit_on_texts(sentences)
 
     encoded_sentences = t.texts_to_sequences(sentences)
+
     padded_sentences = pad_sequences(encoded_sentences, maxlen=MAX_WORDS_SENTENCE, padding='post')    #[13590*100]
 
     voc_size = len(t.word_index) + 1
     data, target = split_data(padded_sentences,voc_size)             #[6795*100]  #[6795*100]
 
-    embeddings = get_embeddings_weights(t, voc_size)
+    embeddings, reverse_word_map = get_embeddings_weights(t, voc_size)
 
-    return embeddings, data, target, voc_size
+    return embeddings, reverse_word_map, data, target, voc_size
 
 
 
@@ -74,25 +77,42 @@ def createModel(embeddings, voc_size):
     model = Sequential()
     e = Embedding(voc_size, 100, weights=[embeddings], input_length=MAX_WORDS_SENTENCE, trainable=False)
     model.add(e)
-    model.add(LSTM(100, input_shape=(MAX_WORDS_SENTENCE,100), return_sequences=True))
-    model.add(Flatten())
-    model.add(Dense(MAX_WORDS_SENTENCE, activation='sigmoid'))
+    model.add(LSTM(30, dropout=0.2, recurrent_dropout=0.2))
+    model.add(Dense(32, activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     print(model.summary())
     return model
 
 def trainModel(model, data, target):  #, data_val, target_val
 
-    model.fit(data,target, nb_epoch=1000, batch_size=100, verbose=2, )  #validation_data=(data_val, target_val)
+    model.fit(data,target, nb_epoch=30, batch_size=100, verbose=2, )  #validation_data=(data_val, target_val)
     loss, accuracy = model.evaluate(data, target, verbose=0)
     print('Accuracy: %f' % (accuracy * 100))
 def main():
 
-    sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
-    embeddings, data, target, voc_size = load_data("train.txt")
+
+    #sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
+    embeddings, reverse_word_map, data, target, voc_size = load_data("train.txt")
+
     model = createModel(embeddings, voc_size)
-    trainModel( model, data, target)
-    model.save_weights("my_model.h5")
+
+    model.load_weights("my_model.h5")
+
+    output = model.predict(data[:2])
+    print(output[1])
+
+    for word in output[1]:
+        vector= np.argmax(word)
+        if(vector!=0):
+            print(reverse_word_map[vector])
+
+
+    #trainModel(model, data, target)
+    #output = model.predict(data)
+    #print(output)
+
+    #trainModel( model, data, target)
+    #model.save_weights("my_model.h5")
 
 
 
